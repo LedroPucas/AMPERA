@@ -83,11 +83,10 @@ async function carregarDispositivos() {
   const salvo = localStorage.getItem('ampera.dispositivo')
   estado.id = estado.dispositivos.find((d) => d.id === (estado.id || salvo))?.id || estado.dispositivos[0]?.id || null
   if (estado.id) lista.value = estado.id
-  const vazio = !estado.id
-  $('#vazio').hidden = !vazio
-  lista.hidden = $('#status').hidden = $('#abas').hidden = vazio
-  if (vazio) document.querySelectorAll('.aba').forEach((s) => (s.hidden = true))
-  else await mostrarAba(estado.aba)
+  // Sem dispositivo as abas continuam visíveis, vazias, com o aviso de que nenhum ESP32 enviou dados.
+  $('#vazio').hidden = !!estado.id
+  lista.hidden = !estado.id
+  await mostrarAba(estado.aba)
 }
 
 $('#dispositivo').addEventListener('change', (e) => {
@@ -128,6 +127,7 @@ function graficoVivo() {
     data: { labels: [], datasets: [{ data: [], borderColor: COR.destaque, backgroundColor: 'rgba(245,180,0,.15)', fill: true, pointRadius: 0, borderWidth: 2, tension: 0.25 }] },
     options: opcoesGrafico(),
   })
+  graficos.vivo.pontos ??= []
   return graficos.vivo
 }
 
@@ -167,6 +167,7 @@ function mostrarResumo(r) {
 }
 
 async function carregarPainel() {
+  if (!estado.id) return void graficoVivo()
   const [resumo, recentes] = await Promise.all([apiDisp('/resumo'), apiDisp('/recentes?min=15')])
   mostrarResumo(resumo)
   const g = graficoVivo()
@@ -234,7 +235,7 @@ function rotuloPeriodo(p) {
 
 async function carregarHistorico() {
   const consulta = { dia: `?dia=${$('#filtro-dia').value}`, mes: `?mes=${$('#filtro-mes').value}`, ano: '' }[estado.modo]
-  const linhas = await apiDisp(`/historico${consulta}`)
+  const linhas = estado.id ? await apiDisp(`/historico${consulta}`) : []
   graficos.historico ??= new Chart($('#grafico-historico'), {
     type: 'bar',
     data: { labels: [], datasets: [{ data: [], backgroundColor: COR.destaque, borderRadius: 4 }] },
@@ -277,7 +278,7 @@ function duracao(inicio, fim) {
 }
 
 async function carregarAlertas() {
-  const alertas = await apiDisp('/alertas')
+  const alertas = estado.id ? await apiDisp('/alertas') : []
   $('#sem-alertas').hidden = alertas.length > 0
   $('#tabela-alertas').hidden = alertas.length === 0
   $('#tabela-alertas').tBodies[0].replaceChildren(
@@ -294,12 +295,20 @@ $('#dias').append(...DIAS.map((nome, i) => {
 }))
 
 async function carregarConfig() {
-  const d = (await apiDisp('/resumo')).dispositivo
   const f = $('#form-config')
+  const msg = $('#msg-config')
+  f.querySelectorAll('input, button').forEach((el) => (el.disabled = !estado.id))
+  if (!estado.id) {
+    msg.textContent = 'As configurações ficam disponíveis quando o ESP32 enviar a primeira leitura.'
+    msg.className = 'suave'
+    msg.hidden = false
+    return
+  }
+  const d = (await apiDisp('/resumo')).dispositivo
   for (const campo of ['nome', 'tarifa', 'abre', 'fecha', 'limite_fora_w']) f.elements[campo].value = d[campo]
   const dias = d.dias_funcionamento.split(',')
   f.querySelectorAll('[name=dia]').forEach((c) => (c.checked = dias.includes(c.value)))
-  $('#msg-config').hidden = true
+  msg.hidden = true
 }
 
 $('#form-config').addEventListener('submit', async (e) => {

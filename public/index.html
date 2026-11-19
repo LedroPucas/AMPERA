@@ -34,12 +34,12 @@
       </div>
     </header>
 
-    <section id="vazio" class="conteudo" hidden>
-      <div class="cartao">
-        <h2>Nenhum dispositivo enviou leituras ainda</h2>
-        <p class="suave">Ligue o ESP32 (firmware em <code>firmware/ampera_esp32</code>) ou rode <code>npm run simular</code> para testar sem o hardware. O dispositivo aparece aqui sozinho na primeira leitura.</p>
+    <div id="vazio" class="conteudo" hidden>
+      <div class="aviso-info">
+        <strong>Sem dados ainda: nenhum ESP32 conectado.</strong>
+        Ligue o ESP32 (firmware em <code>firmware/ampera_esp32</code>) ou rode <code>npm run simular</code> para testar sem o hardware. As leituras aparecem aqui sozinhas assim que a primeira chegar.
       </div>
-    </section>
+    </div>
 
     <section id="aba-painel" class="conteudo aba">
       <div id="aviso-fora" class="aviso" hidden>Consumo fora do horário de funcionamento: <strong id="aviso-fora-w"></strong> agora.</div>
