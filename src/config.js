@@ -5,10 +5,11 @@ if (existsSync('.env')) process.loadEnvFile('.env')
 
 const env = process.env
 const naVercel = !!env.VERCEL
-if (naVercel) {
-  const faltando = ['DATABASE_URL', 'APP_PASSWORD', 'SESSION_SECRET', 'DEVICE_TOKEN'].filter((n) => !env[n])
-  if (faltando.length) throw new Error(`[config] Defina na Vercel as variáveis: ${faltando.join(', ')}`)
-}
+// Na Vercel não dá para derrubar a função ao importar: o erro vira uma resposta legível (ver server.js).
+export const faltando = naVercel
+  ? ['DATABASE_URL', 'APP_PASSWORD', 'SESSION_SECRET', 'DEVICE_TOKEN'].filter((n) => !env[n])
+  : []
+if (faltando.length) console.error(`[config] Defina na Vercel as variáveis: ${faltando.join(', ')}`)
 const gerada = (nome) => {
   const valor = randomBytes(9).toString('base64url')
   console.warn(`[config] ${nome} não definida no .env; usando valor temporário: ${valor}`)
