@@ -27,19 +27,19 @@ const cookie = (req, valor, maxAge) =>
 
 // Tentativas ficam no banco para valer em todas as instâncias (Vercel).
 export async function entrar(req, res) {
+  // Reserva a tentativa antes de conferir a senha: o upsert trava a linha, então requisições paralelas não passam do limite.
   const ip = req.ip || ''
-  const [t] = await consultar('SELECT n, em FROM tentativas_login WHERE ip = $1', [ip])
-  if (t && t.n >= MAX_TENTATIVAS && Date.now() - new Date(t.em) < BLOQUEIO_MS) {
-    return res.status(429).json({ erro: 'Muitas tentativas. Aguarde um minuto.' })
-  }
+  const [t] = await consultar(
+    `INSERT INTO tentativas_login AS t (ip, n, em) VALUES ($1, 1, now())
+     ON CONFLICT (ip) DO UPDATE SET
+       n = CASE WHEN t.em > now() - make_interval(secs => $2) THEN t.n + 1 ELSE 1 END,
+       em = CASE WHEN t.em > now() - make_interval(secs => $2) AND t.n >= $3 THEN t.em ELSE now() END
+     RETURNING n`,
+    [ip, BLOQUEIO_MS / 1000, MAX_TENTATIVAS],
+  )
+  if (t.n > MAX_TENTATIVAS) return res.status(429).json({ erro: 'Muitas tentativas. Aguarde um minuto.' })
   const { usuario, senha } = req.body || {}
   if (!iguais(usuario, config.appUsuario) || !iguais(senha, config.appSenha)) {
-    await consultar(
-      `INSERT INTO tentativas_login (ip, n, em) VALUES ($1, 1, now())
-       ON CONFLICT (ip) DO UPDATE SET em = now(),
-         n = CASE WHEN tentativas_login.em > now() - make_interval(secs => $2) THEN tentativas_login.n + 1 ELSE 1 END`,
-      [ip, BLOQUEIO_MS / 1000],
-    )
     return res.status(401).json({ erro: 'Usuário ou senha incorretos.' })
   }
   await consultar('DELETE FROM tentativas_login WHERE ip = $1', [ip])

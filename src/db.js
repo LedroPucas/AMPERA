@@ -25,7 +25,14 @@ CREATE TABLE IF NOT EXISTS leituras (
 );
 CREATE INDEX IF NOT EXISTS leituras_disp_ts ON leituras (dispositivo_id, ts);
 ALTER TABLE leituras ADD COLUMN IF NOT EXISTS lote TEXT;
-CREATE UNIQUE INDEX IF NOT EXISTS leituras_disp_lote ON leituras (dispositivo_id, lote) WHERE lote IS NOT NULL;
+DO $$ BEGIN
+  IF to_regclass('leituras_disp_lote') IS NULL THEN
+    -- Remove lotes repetidos gravados antes do índice existir (mantém a primeira gravação).
+    DELETE FROM leituras a USING leituras b
+      WHERE a.lote IS NOT NULL AND a.dispositivo_id = b.dispositivo_id AND a.lote = b.lote AND a.id > b.id;
+    CREATE UNIQUE INDEX leituras_disp_lote ON leituras (dispositivo_id, lote) WHERE lote IS NOT NULL;
+  END IF;
+END $$;
 CREATE TABLE IF NOT EXISTS tentativas_login (
   ip TEXT PRIMARY KEY,
   n INTEGER NOT NULL,
