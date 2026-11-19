@@ -1,11 +1,11 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { config } from './config.js'
+import { consultar } from './db.js'
 
 const COOKIE = 'ampera_sessao'
 const DURACAO_S = 12 * 60 * 60
 const MAX_TENTATIVAS = 5
 const BLOQUEIO_MS = 60 * 1000
-const tentativas = new Map()
 
 const assinar = (texto) => createHmac('sha256', config.segredoSessao).update(texto).digest('base64url')
 const iguais = (a, b) => {
@@ -25,18 +25,24 @@ function usuarioDaSessao(req) {
 const cookie = (req, valor, maxAge) =>
   `${COOKIE}=${valor}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${req.secure ? '; Secure' : ''}`
 
-export function entrar(req, res) {
-  const t = tentativas.get(req.ip)
-  if (t && t.n >= MAX_TENTATIVAS && Date.now() - t.em < BLOQUEIO_MS) {
+// Tentativas ficam no banco para valer em todas as instâncias (Vercel).
+export async function entrar(req, res) {
+  const ip = req.ip || ''
+  const [t] = await consultar('SELECT n, em FROM tentativas_login WHERE ip = $1', [ip])
+  if (t && t.n >= MAX_TENTATIVAS && Date.now() - new Date(t.em) < BLOQUEIO_MS) {
     return res.status(429).json({ erro: 'Muitas tentativas. Aguarde um minuto.' })
   }
   const { usuario, senha } = req.body || {}
   if (!iguais(usuario, config.appUsuario) || !iguais(senha, config.appSenha)) {
-    const n = t && Date.now() - t.em < BLOQUEIO_MS ? t.n + 1 : 1
-    tentativas.set(req.ip, { n, em: Date.now() })
+    await consultar(
+      `INSERT INTO tentativas_login (ip, n, em) VALUES ($1, 1, now())
+       ON CONFLICT (ip) DO UPDATE SET em = now(),
+         n = CASE WHEN tentativas_login.em > now() - make_interval(secs => $2) THEN tentativas_login.n + 1 ELSE 1 END`,
+      [ip, BLOQUEIO_MS / 1000],
+    )
     return res.status(401).json({ erro: 'Usuário ou senha incorretos.' })
   }
-  tentativas.delete(req.ip)
+  await consultar('DELETE FROM tentativas_login WHERE ip = $1', [ip])
   const corpo = Buffer.from(JSON.stringify({ u: usuario, exp: Math.floor(Date.now() / 1000) + DURACAO_S })).toString('base64url')
   res.setHeader('Set-Cookie', cookie(req, `${corpo}.${assinar(corpo)}`, DURACAO_S))
   res.json({ usuario })

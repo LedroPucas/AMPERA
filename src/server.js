@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { config } from './config.js'
 import { iniciarBanco, consultar } from './db.js'
 import { iniciarMqtt } from './mqtt.js'
-import { eventos, enfileirarLeitura } from './ingestao.js'
+import { eventos, enfileirarLeitura, foraDoHorario } from './ingestao.js'
 import { entrar, sair, exigirLogin, exigirDispositivo } from './auth.js'
 
 const raiz = (caminho) => fileURLToPath(new URL(`../${caminho}`, import.meta.url))
@@ -98,9 +98,11 @@ app.get('/api/dispositivos/:id/resumo', async (req, res) => {
     const horasRestantes = Math.max((new Date(t.prox) - agora) / 36e5, 0)
     kwhProjetado = t.kwh_mes + (t.kwh_mes / horasMedidas) * horasRestantes
   }
+  const online = !!ultima && agora - new Date(ultima.ts) < ONLINE_MS
   res.json({
     dispositivo: req.dispositivo,
-    online: !!ultima && agora - new Date(ultima.ts) < ONLINE_MS,
+    online,
+    alerta: online && ultima.potencia >= req.dispositivo.limite_fora_w && foraDoHorario(req.dispositivo, new Date(ultima.ts)),
     ultima: ultima || null,
     hoje: { kwh: t.kwh_hoje, custo: t.kwh_hoje * tarifa, pico_w: t.pico_hoje },
     mes: {

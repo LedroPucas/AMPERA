@@ -46,10 +46,8 @@ async function registrarLeitura(id, dados) {
   if (tensao === null || corrente === null || potencia === null) return false
   if (tensao < 0 || tensao > 500 || corrente < 0 || corrente > 200 || potencia < 0 || potencia > 100000) return false
 
-  // Lote repetido (o ESP32 não recebeu a confirmação e reenviou): já gravado, só confirma de novo.
   const lote = typeof dados.lote === 'string' && LOTE_VALIDO.test(dados.lote) ? dados.lote : null
-  const [anterior] = await consultar('SELECT lote, ts FROM leituras WHERE dispositivo_id = $1 ORDER BY id DESC LIMIT 1', [id])
-  if (lote && anterior?.lote === lote) return true
+  const [anterior] = await consultar('SELECT ts FROM leituras WHERE dispositivo_id = $1 ORDER BY id DESC LIMIT 1', [id])
 
   const agora = Date.now()
   const tsInformado = num(dados.ts)
@@ -63,10 +61,13 @@ async function registrarLeitura(id, dados) {
   }
   const fp = num(dados.fp)
 
-  await consultar(
-    'INSERT INTO leituras (dispositivo_id, ts, tensao, corrente, potencia, fp, energia_wh, lote) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+  // Lote repetido (o ESP32 não recebeu a confirmação e reenviou): o índice único descarta e só confirmamos de novo.
+  const inseridas = await consultar(
+    `INSERT INTO leituras (dispositivo_id, ts, tensao, corrente, potencia, fp, energia_wh, lote) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+     ON CONFLICT (dispositivo_id, lote) WHERE lote IS NOT NULL DO NOTHING RETURNING id`,
     [id, ts, tensao, corrente, potencia, fp, energia, lote],
   )
+  if (!inseridas.length) return true
 
   const fora = foraDoHorario(d, ts)
   let alerta = false

@@ -141,6 +141,8 @@ function atualizarStatus() {
 function mostrarResumo(r) {
   if (r.ultima) mostrarLeitura(r.ultima)
   else ['#v-potencia', '#v-corrente', '#v-tensao', '#v-fp'].forEach((s) => ($(s).textContent = '–'))
+  $('#aviso-fora').hidden = !r.alerta
+  if (r.alerta) $('#aviso-fora-w').textContent = watts(r.ultima.potencia)
   $('#v-hoje-custo').textContent = reais(r.hoje.custo)
   $('#v-hoje-kwh').textContent = `${kwh(r.hoje.kwh)} · pico de ${watts(r.hoje.pico_w)}`
   $('#v-mes-custo').textContent = reais(r.mes.custo)
@@ -190,11 +192,14 @@ function conectarStream() {
   }
 }
 
-// Sem tempo real (Vercel): busca as leituras novas a cada 10 s.
-setInterval(() => {
+// Sem tempo real (Vercel): busca dispositivos e leituras novas a cada 10 s.
+setInterval(async () => {
   if (estado.tempoReal || $('#tela-app').hidden) return
-  if (!estado.id) carregarDispositivos().catch(() => {})
-  else if (estado.aba === 'painel') carregarPainel().catch(() => {})
+  try {
+    const lista = await api('/dispositivos')
+    if (lista.length !== estado.dispositivos.length) return await carregarDispositivos()
+    if (estado.id && estado.aba === 'painel') await carregarPainel()
+  } catch {}
 }, 10000)
 
 setInterval(() => {

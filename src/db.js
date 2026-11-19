@@ -25,6 +25,12 @@ CREATE TABLE IF NOT EXISTS leituras (
 );
 CREATE INDEX IF NOT EXISTS leituras_disp_ts ON leituras (dispositivo_id, ts);
 ALTER TABLE leituras ADD COLUMN IF NOT EXISTS lote TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS leituras_disp_lote ON leituras (dispositivo_id, lote) WHERE lote IS NOT NULL;
+CREATE TABLE IF NOT EXISTS tentativas_login (
+  ip TEXT PRIMARY KEY,
+  n INTEGER NOT NULL,
+  em TIMESTAMPTZ NOT NULL
+);
 CREATE TABLE IF NOT EXISTS alertas (
   id BIGSERIAL PRIMARY KEY,
   dispositivo_id TEXT NOT NULL REFERENCES dispositivos(id) ON DELETE CASCADE,
