@@ -18,9 +18,12 @@ export const config = {
   appUsuario: env.APP_USER || 'admin',
   appSenha: env.APP_PASSWORD || gerada('APP_PASSWORD'),
   segredoSessao: env.SESSION_SECRET || randomBytes(32).toString('hex'),
+  confiarProxy: env.TRUST_PROXY === '1',
+  tokenDispositivo: env.DEVICE_TOKEN || '',
+  mqttAtivo: env.MQTT_ATIVO !== 'false',
   mqttUrl: env.MQTT_URL || '',
   mqttPorta: Number(env.MQTT_PORT || 1883),
   mqttUsuario: env.MQTT_USER || 'ampera',
-  mqttSenha: env.MQTT_PASSWORD || gerada('MQTT_PASSWORD'),
+  mqttSenha: env.MQTT_PASSWORD || (env.MQTT_ATIVO === 'false' ? '' : gerada('MQTT_PASSWORD')),
   tarifaPadrao: Number(env.TARIFA_PADRAO || 0.85),
 }

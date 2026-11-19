@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS leituras (
   energia_wh DOUBLE PRECISION NOT NULL
 );
 CREATE INDEX IF NOT EXISTS leituras_disp_ts ON leituras (dispositivo_id, ts);
+ALTER TABLE leituras ADD COLUMN IF NOT EXISTS lote TEXT;
 CREATE TABLE IF NOT EXISTS alertas (
   id BIGSERIAL PRIMARY KEY,
   dispositivo_id TEXT NOT NULL REFERENCES dispositivos(id) ON DELETE CASCADE,

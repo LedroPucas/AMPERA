@@ -2,6 +2,7 @@
 //   npm run simular                      -> leituras ao vivo a cada 10 s (dispositivo "simulador")
 //   npm run simular -- --historico=7     -> antes, preenche os últimos 7 dias (1 leitura por minuto)
 //   npm run simular -- --id=loja --intervalo=2
+//   npm run simular -- --url=https://SEU-APP.onrender.com   -> envia por HTTP(S) com o DEVICE_TOKEN do .env
 import mqtt from 'mqtt'
 import { config } from '../src/config.js'
 
@@ -38,9 +39,24 @@ function leitura(data, segundos) {
   }
 }
 
-const url = config.mqttUrl || `mqtt://127.0.0.1:${config.mqttPorta}`
-const cliente = await mqtt.connectAsync(url, { username: config.mqttUsuario, password: config.mqttSenha })
-console.log(`[simulador] conectado em ${url}, publicando em ${topico}`)
+let enviar, destino
+if (args.url) {
+  destino = `${args.url.replace(/\/$/, '')}/api/leitura/${id}`
+  enviar = async (dados) => {
+    const r = await fetch(destino, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.tokenDispositivo}` },
+      body: JSON.stringify(dados),
+    })
+    if (!r.ok) throw new Error(`HTTP ${r.status} ${await r.text()}`)
+  }
+} else {
+  const url = config.mqttUrl || `mqtt://127.0.0.1:${config.mqttPorta}`
+  const cliente = await mqtt.connectAsync(url, { username: config.mqttUsuario, password: config.mqttSenha })
+  destino = `${url} (${topico})`
+  enviar = (dados) => cliente.publishAsync(topico, JSON.stringify(dados), { qos: 1 })
+}
+console.log(`[simulador] enviando para ${destino}`)
 
 if (diasHistorico > 0) {
   const fim = Date.now() - 60000
@@ -48,15 +64,16 @@ if (diasHistorico > 0) {
   console.log(`[simulador] enviando ${total} leituras de histórico...`)
   for (let n = total; n > 0; n--) {
     const data = new Date(fim - n * 60000)
-    await cliente.publishAsync(topico, JSON.stringify({ ...leitura(data, 60), ts: Math.floor(data / 1000) }), { qos: 1 })
+    await enviar({ ...leitura(data, 60), ts: Math.floor(data / 1000) })
   }
   console.log('[simulador] histórico enviado')
 }
 
 const publicar = () => {
   const dados = leitura(new Date(), intervalo)
-  cliente.publish(topico, JSON.stringify(dados))
-  console.log(`[simulador] ${dados.p} W  ${dados.v} V  ${dados.i} A`)
+  enviar(dados)
+    .then(() => console.log(`[simulador] ${dados.p} W  ${dados.v} V  ${dados.i} A`))
+    .catch((e) => console.error('[simulador] falhou:', e.message))
 }
 publicar()
 setInterval(publicar, intervalo * 1000)
