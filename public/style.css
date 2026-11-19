@@ -85,6 +85,9 @@ label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.9rem; }
 .g4 { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
 .grafico { position: relative; height: 260px; }
 
+.aviso-info { background: #2e2608; border: 1px solid var(--destaque); color: #ffe7a3; border-radius: 12px; padding: 0.75rem 1rem; }
+.aviso-info strong { display: block; margin-bottom: 0.25rem; }
+#vazio { padding-bottom: 0; }
 .aviso { background: #3a1814; border: 1px solid var(--perigo); color: #ffd3ce; border-radius: 12px; padding: 0.75rem 1rem; }
 
 .barra { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; }
@@ -107,3 +110,5 @@ fieldset { border: 1px solid var(--borda); border-radius: 8px; padding: 0.6rem 0
 legend { color: var(--suave); font-size: 0.85rem; padding: 0 0.3rem; }
 .dias { display: flex; flex-wrap: wrap; gap: 0.4rem 0.9rem; }
 .dias label { flex-direction: row; align-items: center; gap: 0.3rem; }
+
+button:disabled { opacity: 0.5; cursor: not-allowed; }
