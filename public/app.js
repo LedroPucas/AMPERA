@@ -23,7 +23,7 @@ async function api(caminho, opcoes = {}) {
   })
   const dados = await resposta.json().catch(() => ({}))
   if (resposta.status === 401 && caminho !== '/login') mostrarLogin()
-  if (!resposta.ok) throw new Error(dados.erro || 'Falha na comunicação com o servidor.')
+  if (!resposta.ok) throw new Error(dados.erro || `Erro ${resposta.status} no servidor.`)
   return dados
 }
 const apiDisp = (caminho = '', opcoes) => api(`/dispositivos/${encodeURIComponent(estado.id)}${caminho}`, opcoes)
@@ -56,7 +56,16 @@ $('#sair').addEventListener('click', async () => {
 
 async function iniciar() {
   let eu
-  try { eu = await api('/me') } catch { return }
+  try {
+    eu = await api('/me')
+  } catch (erro) {
+    if ($('#tela-login').hidden) {
+      mostrarLogin()
+      $('#erro-login').textContent = erro.message
+      $('#erro-login').hidden = false
+    }
+    return
+  }
   estado.fuso = eu.fuso
   estado.tempoReal = eu.tempo_real
   $('#tela-login').hidden = true

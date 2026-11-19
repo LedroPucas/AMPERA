@@ -1,6 +1,6 @@
 import express from 'express'
 import { fileURLToPath } from 'node:url'
-import { config } from './config.js'
+import { config, faltando } from './config.js'
 import { iniciarBanco, consultar } from './db.js'
 import { iniciarMqtt } from './mqtt.js'
 import { eventos, enfileirarLeitura, foraDoHorario } from './ingestao.js'
@@ -19,8 +19,12 @@ app.use('/vendor', express.static(raiz('node_modules/chart.js/dist')))
 // Na Vercel o banco é conectado na primeira requisição de cada instância (e de novo se falhar).
 let bancoPronto
 app.use((req, res, next) => {
+  if (faltando.length) {
+    return res.status(500).json({ erro: `Cadastre na Vercel as variáveis ${faltando.join(', ')} e faça Redeploy.` })
+  }
   bancoPronto ??= iniciarBanco().catch((erro) => {
     bancoPronto = null
+    erro.banco = true
     throw erro
   })
   bancoPronto.then(() => next(), next)
@@ -162,7 +166,7 @@ app.get('/api/stream', (req, res) => {
 
 app.use((erro, req, res, next) => {
   console.error('[api]', erro)
-  res.status(500).json({ erro: 'Erro interno.' })
+  res.status(500).json({ erro: erro.banco ? 'Não foi possível conectar ao banco. Confira a DATABASE_URL.' : 'Erro interno.' })
 })
 
 export default app
