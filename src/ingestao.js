@@ -46,11 +46,11 @@ export function foraDoHorario(d, data) {
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 
 // Payload esperado: { v, i, p, fp?, e_wh?, ts? } — ts (epoch em segundos) só é aceito se estiver no passado.
-export async function registrarLeitura(id, dados) {
-  if (!ID_VALIDO.test(id) || !dados || typeof dados !== 'object') return
+async function registrarLeitura(id, dados) {
+  if (!ID_VALIDO.test(id) || !dados || typeof dados !== 'object') return false
   const tensao = num(dados.v), corrente = num(dados.i), potencia = num(dados.p)
-  if (tensao === null || corrente === null || potencia === null) return
-  if (tensao < 0 || tensao > 500 || corrente < 0 || corrente > 200 || potencia < 0 || potencia > 100000) return
+  if (tensao === null || corrente === null || potencia === null) return false
+  if (tensao < 0 || tensao > 500 || corrente < 0 || corrente > 200 || potencia < 0 || potencia > 100000) return false
 
   const agora = Date.now()
   const tsInformado = num(dados.ts)
@@ -92,4 +92,14 @@ export async function registrarLeitura(id, dados) {
   if (agora - ts.getTime() < 60000) {
     eventos.emit('leitura', { dispositivo: id, ts: ts.toISOString(), tensao, corrente, potencia, fp, energia_wh: energia, fora, alerta })
   }
+  return true
+}
+
+// Fila em série (MQTT e HTTP): mantém a ordem das leituras e não sobrecarrega o banco.
+// Resolve com true se a leitura foi gravada e false se foi recusada.
+let fila = Promise.resolve()
+export function enfileirarLeitura(id, dados) {
+  const resultado = fila.then(() => registrarLeitura(id, dados))
+  fila = resultado.catch(() => {})
+  return resultado
 }

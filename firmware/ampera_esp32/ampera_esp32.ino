@@ -1,7 +1,9 @@
 // AMPERA - firmware do ESP32 DevKit V1
 // Mede tensão (ZMPT101B) e corrente (SCT-013-000), calcula potência real e energia
-// e publica um JSON por MQTT a cada 10 segundos em ampera/<DISPOSITIVO_ID>/leitura:
+// e envia um JSON a cada 10 segundos:
 //   {"v":127.1,"i":7.85,"p":995.2,"fp":0.99,"e_wh":2.764}
+// por HTTP(S) para POST <SERVIDOR_URL>/api/leitura/<DISPOSITIVO_ID> (USAR_HTTP 1)
+// ou por MQTT no tópico ampera/<DISPOSITIVO_ID>/leitura (USAR_HTTP 0).
 //
 // Biblioteca necessária (Arduino IDE > Gerenciador de Bibliotecas): PubSubClient (Nick O'Leary).
 //
@@ -13,20 +15,30 @@
 
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <HTTPClient.h>
 #include <PubSubClient.h>
 
 // ---------- Configuração: preencha com os seus dados ----------
 const char* WIFI_NOME = "SUA_REDE_2.4GHZ";
 const char* WIFI_SENHA = "SENHA_DO_WIFI";
 
-// Broker embutido do servidor AMPERA: IP do computador na rede, porta 1883, USAR_TLS 0.
-// Broker na nuvem (ex.: HiveMQ Cloud): endereço do cluster, porta 8883, USAR_TLS 1.
+const char* DISPOSITIVO_ID = "loja";  // só letras, números, - e _
+
+// Modo de envio: 1 = HTTP(S) direto para o servidor (ex.: Render), 0 = MQTT.
+#define USAR_HTTP 1
+
+// HTTP(S): endereço do servidor e o mesmo DEVICE_TOKEN do .env / do Render.
+//   Na nuvem: "https://SEU-APP.onrender.com"   No computador: "http://192.168.0.10:3000"
+const char* SERVIDOR_URL = "https://SEU-APP.onrender.com";
+const char* TOKEN_DISPOSITIVO = "MESMO_DEVICE_TOKEN_DO_SERVIDOR";
+
+// MQTT, broker embutido do servidor AMPERA: IP do computador na rede, porta 1883, USAR_TLS 0.
+// MQTT, broker na nuvem (ex.: HiveMQ Cloud): endereço do cluster, porta 8883, USAR_TLS 1.
 #define USAR_TLS 0
 const char* MQTT_SERVIDOR = "192.168.0.10";
 const uint16_t MQTT_PORTA = 1883;
 const char* MQTT_USUARIO = "ampera";
 const char* MQTT_SENHA = "MESMA_SENHA_DO_ARQUIVO_.env";
-const char* DISPOSITIVO_ID = "loja";  // só letras, números, - e _
 
 // ---------- Calibração (seção de calibração do guia de montagem) ----------
 // CAL_CORRENTE = espiras do SCT-013-000 (2000) / resistor de carga (22 ohms).
@@ -42,12 +54,16 @@ const unsigned long JANELA_MEDICAO_MS = 200;      // 12 ciclos de 60 Hz
 const unsigned long INTERVALO_ENVIO_MS = 10000;
 const float VOLTS_POR_CONTAGEM = 3.3 / 4095.0;
 
-#if USAR_TLS
+#if USAR_HTTP
+WiFiClientSecure redeSegura;
+WiFiClient redeSimples;
+#elif USAR_TLS
 WiFiClientSecure rede;
+PubSubClient mqtt(rede);
 #else
 WiFiClient rede;
-#endif
 PubSubClient mqtt(rede);
+#endif
 
 float deslocV = 2048, deslocI = 2048;  // nível médio (DC) de cada sinal, ajustado continuamente
 float tensao = 0, corrente = 0, potencia = 0, fp = 0;
@@ -85,6 +101,24 @@ void medir() {
   ultimaMedicao = agora;
 }
 
+#if USAR_HTTP
+void manterConexao() {}
+
+bool publicar(const char* mensagem) {
+  if (WiFi.status() != WL_CONNECTED) return false;
+  String url = String(SERVIDOR_URL) + "/api/leitura/" + DISPOSITIVO_ID;
+  HTTPClient http;
+  http.setTimeout(15000);  // servidor grátis pode levar alguns segundos para acordar
+  bool ok = url.startsWith("https") ? http.begin(redeSegura, url) : http.begin(redeSimples, url);
+  if (!ok) return false;
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("Authorization", String("Bearer ") + TOKEN_DISPOSITIVO);
+  int codigo = http.POST((uint8_t*)mensagem, strlen(mensagem));
+  if (codigo < 200 || codigo >= 300) Serial.printf("HTTP falhou (%d)\n", codigo);
+  http.end();
+  return codigo >= 200 && codigo < 300;
+}
+#else
 void manterConexao() {
   if (WiFi.status() != WL_CONNECTED || mqtt.connected()) return;
   if (millis() - ultimaTentativaMqtt < 5000) return;
@@ -94,14 +128,20 @@ void manterConexao() {
   else Serial.printf("MQTT falhou (estado %d)\n", mqtt.state());
 }
 
-void enviar() {
-  char topico[80], mensagem[160];
+bool publicar(const char* mensagem) {
+  char topico[80];
   snprintf(topico, sizeof(topico), "ampera/%s/leitura", DISPOSITIVO_ID);
+  return mqtt.connected() && mqtt.publish(topico, mensagem);
+}
+#endif
+
+void enviar() {
+  char mensagem[160];
   snprintf(mensagem, sizeof(mensagem), "{\"v\":%.1f,\"i\":%.2f,\"p\":%.1f,\"fp\":%.2f,\"e_wh\":%.4f}",
            tensao, corrente, potencia, fp, energiaWh);
   Serial.println(mensagem);
   // Sem conexão, a energia continua acumulando e segue no próximo envio que der certo.
-  if (mqtt.connected() && mqtt.publish(topico, mensagem)) energiaWh = 0;
+  if (publicar(mensagem)) energiaWh = 0;
 }
 
 void setup() {
@@ -114,12 +154,16 @@ void setup() {
   WiFi.setAutoReconnect(true);
   WiFi.begin(WIFI_NOME, WIFI_SENHA);
 
-#if USAR_TLS
   // Protótipo: criptografa, mas ainda não valida o certificado do servidor.
-  // Para validar, troque por rede.setCACert(CERTIFICADO_RAIZ).
+  // Para validar, troque setInsecure() por setCACert(CERTIFICADO_RAIZ).
+#if USAR_HTTP
+  redeSegura.setInsecure();
+#else
+#if USAR_TLS
   rede.setInsecure();
 #endif
   mqtt.setServer(MQTT_SERVIDOR, MQTT_PORTA);
+#endif
 
   for (int n = 0; n < 10; n++) medir();  // deixa o nível médio estabilizar antes de contar energia
   energiaWh = 0;
@@ -128,7 +172,9 @@ void setup() {
 void loop() {
   medir();
   manterConexao();
+#if !USAR_HTTP
   mqtt.loop();
+#endif
   if (millis() - ultimoEnvio >= INTERVALO_ENVIO_MS) {
     ultimoEnvio = millis();
     enviar();

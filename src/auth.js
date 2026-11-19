@@ -47,6 +47,13 @@ export function sair(req, res) {
   res.json({ ok: true })
 }
 
+export function exigirDispositivo(req, res, next) {
+  if (!config.tokenDispositivo) return res.status(503).json({ erro: 'Envio por HTTP desativado: defina DEVICE_TOKEN.' })
+  const token = (req.headers.authorization || '').replace(/^Bearer /, '')
+  if (!iguais(token, config.tokenDispositivo)) return res.status(401).json({ erro: 'Token do dispositivo inválido.' })
+  next()
+}
+
 export function exigirLogin(req, res, next) {
   req.usuario = usuarioDaSessao(req)
   if (!req.usuario) return res.status(401).json({ erro: 'Sessão expirada. Entre novamente.' })

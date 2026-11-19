@@ -3,20 +3,28 @@ import { fileURLToPath } from 'node:url'
 import { config } from './config.js'
 import { iniciarBanco, consultar } from './db.js'
 import { iniciarMqtt } from './mqtt.js'
-import { eventos, esquecerDispositivo } from './ingestao.js'
-import { entrar, sair, exigirLogin } from './auth.js'
+import { eventos, esquecerDispositivo, enfileirarLeitura } from './ingestao.js'
+import { entrar, sair, exigirLogin, exigirDispositivo } from './auth.js'
 
 const raiz = (caminho) => fileURLToPath(new URL(`../${caminho}`, import.meta.url))
 const ONLINE_MS = 35 * 1000
 const FUSO = config.fuso
 
 const app = express()
+if (config.confiarProxy) app.set('trust proxy', 1)
 app.use(express.json({ limit: '10kb' }))
 app.use(express.static(raiz('public')))
 app.use('/vendor', express.static(raiz('node_modules/chart.js/dist')))
 
 app.post('/api/login', entrar)
 app.post('/api/logout', sair)
+
+// Leitura enviada pelo ESP32 por HTTP(S), mesmo JSON da mensagem MQTT.
+app.post('/api/leitura/:dispositivo', exigirDispositivo, async (req, res) => {
+  const gravada = await enfileirarLeitura(req.params.dispositivo, req.body)
+  if (!gravada) return res.status(400).json({ erro: 'Leitura inválida.' })
+  res.status(204).end()
+})
 app.use('/api', exigirLogin)
 app.get('/api/me', (req, res) => res.json({ usuario: req.usuario, fuso: FUSO }))
 
@@ -147,5 +155,5 @@ app.use((erro, req, res, next) => {
 })
 
 await iniciarBanco()
-await iniciarMqtt()
+if (config.mqttAtivo) await iniciarMqtt()
 app.listen(config.porta, () => console.log(`[web] AMPERA em http://localhost:${config.porta} (usuário "${config.appUsuario}")`))

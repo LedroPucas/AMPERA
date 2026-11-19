@@ -2,7 +2,7 @@ import { createServer } from 'node:net'
 import { timingSafeEqual } from 'node:crypto'
 import mqtt from 'mqtt'
 import { config } from './config.js'
-import { registrarLeitura } from './ingestao.js'
+import { enfileirarLeitura } from './ingestao.js'
 
 const TOPICO = 'ampera/+/leitura'
 
@@ -37,13 +37,11 @@ export async function iniciarMqtt() {
   })
   cliente.on('error', (e) => console.error('[mqtt] erro:', e.message))
 
-  // Fila em série: mantém a ordem das leituras e não sobrecarrega o banco.
-  let fila = Promise.resolve()
   cliente.on('message', (topico, mensagem) => {
     const id = topico.split('/')[1]
     let dados
     try { dados = JSON.parse(mensagem.toString()) } catch { return }
-    fila = fila.then(() => registrarLeitura(id, dados)).catch((e) => console.error('[ingestão]', e.message))
+    enfileirarLeitura(id, dados).catch((e) => console.error('[ingestão]', e.message))
   })
   return cliente
 }
