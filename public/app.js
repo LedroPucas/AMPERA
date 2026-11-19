@@ -118,6 +118,7 @@ function graficoVivo() {
     data: { labels: [], datasets: [{ data: [], borderColor: COR.destaque, backgroundColor: 'rgba(245,180,0,.15)', fill: true, pointRadius: 0, borderWidth: 2, tension: 0.25 }] },
     options: opcoesGrafico(),
   })
+  graficos.vivo.pontos ??= []
   return graficos.vivo
 }
 
