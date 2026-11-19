@@ -85,7 +85,8 @@ As tabelas são criadas na primeira execução.
 
 ## ESP32
 
-O firmware está em `firmware/ampera_esp32/ampera_esp32.ino` (Arduino IDE, placa "ESP32 Dev Module", biblioteca PubSubClient).
+O firmware está em `firmware/ampera_esp32/ampera_esp32.ino` (Arduino IDE, placa "ESP32 Dev Module" com o núcleo esp32 3.x, biblioteca PubSubClient).
+O certificado do servidor é validado com as autoridades certificadoras embutidas no núcleo.
 Preencha no início do arquivo: Wi-Fi, `DISPOSITIVO_ID` e o modo de envio.
 
 - HTTP(S) (`USAR_HTTP 1`, padrão): `SERVIDOR_URL` (ex.: `https://SEU-APP.onrender.com` ou `http://IP-DO-PC:3000`) e `TOKEN_DISPOSITIVO` igual ao `DEVICE_TOKEN` do servidor.
@@ -107,6 +108,7 @@ Tópico `ampera/<id-do-dispositivo>/leitura`, JSON:
 | `p`    | potência real (W)                                                  |
 | `fp`   | fator de potência (opcional)                                       |
 | `e_wh` | energia acumulada desde o último envio bem-sucedido (Wh, opcional) |
+| `lote` | identificador do envio (opcional); um lote repetido é confirmado sem somar a energia de novo |
 
 Se o Wi-Fi cair, o ESP32 continua medindo e manda a energia acumulada quando a conexão volta.
 
