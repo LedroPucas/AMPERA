@@ -7,24 +7,17 @@ eventos.setMaxListeners(0)
 
 const ID_VALIDO = /^[A-Za-z0-9_-]{1,40}$/
 const JANELA_ALERTA_MS = 5 * 60 * 1000
-const dispositivos = new Map()
-const ultimas = new Map()
 const LOTE_VALIDO = /^[A-Za-z0-9_-]{1,40}$/
 
-export function esquecerDispositivo(id) {
-  dispositivos.delete(id)
-}
-
+// Sem cache em memória: na Vercel cada requisição pode cair numa instância diferente.
 async function obterDispositivo(id) {
-  if (!dispositivos.has(id)) {
-    await consultar(
-      'INSERT INTO dispositivos (id, nome, tarifa) VALUES ($1, $1, $2) ON CONFLICT (id) DO NOTHING',
-      [id, config.tarifaPadrao],
-    )
-    const [d] = await consultar('SELECT * FROM dispositivos WHERE id = $1', [id])
-    dispositivos.set(id, d)
-  }
-  return dispositivos.get(id)
+  const [d] = await consultar('SELECT * FROM dispositivos WHERE id = $1', [id])
+  if (d) return d
+  await consultar(
+    'INSERT INTO dispositivos (id, nome, tarifa) VALUES ($1, $1, $2) ON CONFLICT (id) DO NOTHING',
+    [id, config.tarifaPadrao],
+  )
+  return (await consultar('SELECT * FROM dispositivos WHERE id = $1', [id]))[0]
 }
 
 const formatadores = new Map()
@@ -53,12 +46,8 @@ async function registrarLeitura(id, dados) {
   if (tensao === null || corrente === null || potencia === null) return false
   if (tensao < 0 || tensao > 500 || corrente < 0 || corrente > 200 || potencia < 0 || potencia > 100000) return false
 
-  // Lote repetido (o ESP32 não recebeu a confirmação e reenviou): já gravado, só confirma de novo.
   const lote = typeof dados.lote === 'string' && LOTE_VALIDO.test(dados.lote) ? dados.lote : null
-  if (lote) {
-    const [ultima] = await consultar('SELECT lote FROM leituras WHERE dispositivo_id = $1 ORDER BY id DESC LIMIT 1', [id])
-    if (ultima?.lote === lote) return true
-  }
+  const [anterior] = await consultar('SELECT ts FROM leituras WHERE dispositivo_id = $1 ORDER BY id DESC LIMIT 1', [id])
 
   const agora = Date.now()
   const tsInformado = num(dados.ts)
@@ -67,17 +56,18 @@ async function registrarLeitura(id, dados) {
 
   let energia = num(dados.e_wh)
   if (energia === null || energia < 0) {
-    const anterior = ultimas.get(id)
-    const dtS = anterior ? Math.min((ts - anterior) / 1000, 60) : 0
+    const dtS = anterior ? Math.min((ts - new Date(anterior.ts)) / 1000, 60) : 0
     energia = dtS > 0 ? (potencia * dtS) / 3600 : 0
   }
-  ultimas.set(id, ts.getTime())
   const fp = num(dados.fp)
 
-  await consultar(
-    'INSERT INTO leituras (dispositivo_id, ts, tensao, corrente, potencia, fp, energia_wh, lote) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+  // Lote repetido (o ESP32 não recebeu a confirmação e reenviou): o índice único descarta e só confirmamos de novo.
+  const inseridas = await consultar(
+    `INSERT INTO leituras (dispositivo_id, ts, tensao, corrente, potencia, fp, energia_wh, lote) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+     ON CONFLICT (dispositivo_id, lote) WHERE lote IS NOT NULL DO NOTHING RETURNING id`,
     [id, ts, tensao, corrente, potencia, fp, energia, lote],
   )
+  if (!inseridas.length) return true
 
   const fora = foraDoHorario(d, ts)
   let alerta = false

@@ -4,7 +4,7 @@ const ONLINE_MS = 35 * 1000
 const DIAS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 const COR = { destaque: '#f5b400', grade: '#26324a', texto: '#8e9bb3' }
 
-const estado = { fuso: undefined, dispositivos: [], id: null, aba: 'painel', modo: 'dia', ultimaTs: 0, stream: null }
+const estado = { tempoReal: true, fuso: undefined, dispositivos: [], id: null, aba: 'painel', modo: 'dia', ultimaTs: 0, stream: null }
 const graficos = {}
 
 const numero = (v, casas = 0) => v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas })
@@ -58,12 +58,13 @@ async function iniciar() {
   let eu
   try { eu = await api('/me') } catch { return }
   estado.fuso = eu.fuso
+  estado.tempoReal = eu.tempo_real
   $('#tela-login').hidden = true
   $('#tela-app').hidden = false
   $('#filtro-dia').value = hojeLocal()
   $('#filtro-mes').value = hojeLocal().slice(0, 7)
   await carregarDispositivos()
-  conectarStream()
+  if (estado.tempoReal) conectarStream()
 }
 
 async function carregarDispositivos() {
@@ -140,6 +141,8 @@ function atualizarStatus() {
 function mostrarResumo(r) {
   if (r.ultima) mostrarLeitura(r.ultima)
   else ['#v-potencia', '#v-corrente', '#v-tensao', '#v-fp'].forEach((s) => ($(s).textContent = '–'))
+  $('#aviso-fora').hidden = !r.alerta
+  if (r.alerta) $('#aviso-fora-w').textContent = watts(r.ultima.potencia)
   $('#v-hoje-custo').textContent = reais(r.hoje.custo)
   $('#v-hoje-kwh').textContent = `${kwh(r.hoje.kwh)} · pico de ${watts(r.hoje.pico_w)}`
   $('#v-mes-custo').textContent = reais(r.mes.custo)
@@ -188,6 +191,16 @@ function conectarStream() {
     if (estado.aba === 'painel') g.update()
   }
 }
+
+// Sem tempo real (Vercel): busca dispositivos e leituras novas a cada 10 s.
+setInterval(async () => {
+  if (estado.tempoReal || $('#tela-app').hidden) return
+  try {
+    const lista = await api('/dispositivos')
+    if (lista.length !== estado.dispositivos.length) return await carregarDispositivos()
+    if (estado.id && estado.aba === 'painel') await carregarPainel()
+  } catch {}
+}, 10000)
 
 setInterval(() => {
   if ($('#tela-app').hidden || !estado.id) return

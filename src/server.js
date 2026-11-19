@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { config } from './config.js'
 import { iniciarBanco, consultar } from './db.js'
 import { iniciarMqtt } from './mqtt.js'
-import { eventos, esquecerDispositivo, enfileirarLeitura } from './ingestao.js'
+import { eventos, enfileirarLeitura, foraDoHorario } from './ingestao.js'
 import { entrar, sair, exigirLogin, exigirDispositivo } from './auth.js'
 
 const raiz = (caminho) => fileURLToPath(new URL(`../${caminho}`, import.meta.url))
@@ -16,6 +16,16 @@ app.use(express.json({ limit: '10kb' }))
 app.use(express.static(raiz('public')))
 app.use('/vendor', express.static(raiz('node_modules/chart.js/dist')))
 
+// Na Vercel o banco é conectado na primeira requisição de cada instância (e de novo se falhar).
+let bancoPronto
+app.use((req, res, next) => {
+  bancoPronto ??= iniciarBanco().catch((erro) => {
+    bancoPronto = null
+    throw erro
+  })
+  bancoPronto.then(() => next(), next)
+})
+
 app.post('/api/login', entrar)
 app.post('/api/logout', sair)
 
@@ -26,7 +36,7 @@ app.post('/api/leitura/:dispositivo', exigirDispositivo, async (req, res) => {
   res.status(204).end()
 })
 app.use('/api', exigirLogin)
-app.get('/api/me', (req, res) => res.json({ usuario: req.usuario, fuso: FUSO }))
+app.get('/api/me', (req, res) => res.json({ usuario: req.usuario, fuso: FUSO, tempo_real: !config.naVercel }))
 
 app.get('/api/dispositivos', async (req, res) => {
   res.json(await consultar('SELECT * FROM dispositivos ORDER BY criado_em'))
@@ -53,7 +63,6 @@ app.put('/api/dispositivos/:id', async (req, res) => {
      WHERE id=$1 RETURNING *`,
     [req.params.id, nome.trim(), tarifa, abre, fecha, [...new Set(dias)].sort().join(','), limite],
   )
-  esquecerDispositivo(req.params.id)
   res.json(d)
 })
 
@@ -89,9 +98,11 @@ app.get('/api/dispositivos/:id/resumo', async (req, res) => {
     const horasRestantes = Math.max((new Date(t.prox) - agora) / 36e5, 0)
     kwhProjetado = t.kwh_mes + (t.kwh_mes / horasMedidas) * horasRestantes
   }
+  const online = !!ultima && agora - new Date(ultima.ts) < ONLINE_MS
   res.json({
     dispositivo: req.dispositivo,
-    online: !!ultima && agora - new Date(ultima.ts) < ONLINE_MS,
+    online,
+    alerta: online && ultima.potencia >= req.dispositivo.limite_fora_w && foraDoHorario(req.dispositivo, new Date(ultima.ts)),
     ultima: ultima || null,
     hoje: { kwh: t.kwh_hoje, custo: t.kwh_hoje * tarifa, pico_w: t.pico_hoje },
     mes: {
@@ -154,6 +165,10 @@ app.use((erro, req, res, next) => {
   res.status(500).json({ erro: 'Erro interno.' })
 })
 
-await iniciarBanco()
-if (config.mqttAtivo) await iniciarMqtt()
-app.listen(config.porta, () => console.log(`[web] AMPERA em http://localhost:${config.porta} (usuário "${config.appUsuario}")`))
+export default app
+
+if (!config.naVercel) {
+  await (bancoPronto = iniciarBanco())
+  if (config.mqttAtivo) await iniciarMqtt()
+  app.listen(config.porta, () => console.log(`[web] AMPERA em http://localhost:${config.porta} (usuário "${config.appUsuario}")`))
+}
