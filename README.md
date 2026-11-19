@@ -42,10 +42,31 @@ npm run simular -- --historico=7    # antes, preenche os últimos 7 dias
 npm run simular -- --url=http://localhost:3000   # envia por HTTP com o DEVICE_TOKEN do .env
 ```
 
-## Colocar no ar (grátis: Render + Neon, sem broker MQTT)
+## Colocar no ar na Vercel (grátis: Vercel + Neon, sem broker MQTT)
 
-O servidor precisa ficar ligado o tempo todo, então **não funciona na Vercel** (funções serverless).
 O site e o backend são o mesmo programa; o ESP32 envia as leituras por HTTPS direto para ele.
+Na Vercel o MQTT fica desligado e o painel busca leituras novas a cada 10 s (em vez de tempo real).
+
+1. **Banco (Neon)**: crie um projeto em neon.tech e copie a connection string (`postgresql://...?sslmode=require`).
+2. **Vercel**: importe o repositório `AMPERA` (o `vercel.json` já configura tudo; não mude Build/Output).
+   Em Settings > Environment Variables (ambiente Production), defina:
+
+   ```
+   APP_USER=admin
+   APP_PASSWORD=<senha do painel>
+   SESSION_SECRET=<texto longo e aleatório>
+   DEVICE_TOKEN=<token longo e aleatório, o mesmo do firmware>
+   DATABASE_URL=<connection string do Neon>
+   TZ_NEGOCIO=America/Sao_Paulo
+   TARIFA_PADRAO=0.85
+   ```
+
+   Depois faça um Redeploy. Sem `DATABASE_URL`, `APP_PASSWORD`, `SESSION_SECRET` ou `DEVICE_TOKEN` a função não sobe e o log mostra qual falta.
+3. **ESP32**: `USAR_HTTP 1`, `SERVIDOR_URL = "https://SEU-APP.vercel.app"` (o domínio de produção) e `TOKEN_DISPOSITIVO` igual ao `DEVICE_TOKEN`.
+
+## Colocar no ar no Render (com tempo real)
+
+O Render mantém o servidor ligado, então o painel atualiza em tempo real.
 
 1. **Banco (Neon)**: crie um projeto em neon.tech e copie a connection string (`postgresql://...?sslmode=require`).
 2. **Servidor (Render)**: New > Web Service > repositório `AMPERA`. Build `npm install`, Start `npm start`, plano Free.

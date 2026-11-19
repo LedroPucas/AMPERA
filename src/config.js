@@ -4,6 +4,11 @@ import { randomBytes } from 'node:crypto'
 if (existsSync('.env')) process.loadEnvFile('.env')
 
 const env = process.env
+const naVercel = !!env.VERCEL
+if (naVercel) {
+  const faltando = ['DATABASE_URL', 'APP_PASSWORD', 'SESSION_SECRET', 'DEVICE_TOKEN'].filter((n) => !env[n])
+  if (faltando.length) throw new Error(`[config] Defina na Vercel as variáveis: ${faltando.join(', ')}`)
+}
 const gerada = (nome) => {
   const valor = randomBytes(9).toString('base64url')
   console.warn(`[config] ${nome} não definida no .env; usando valor temporário: ${valor}`)
@@ -11,6 +16,7 @@ const gerada = (nome) => {
 }
 
 export const config = {
+  naVercel,
   porta: Number(env.PORT || 3000),
   fuso: env.TZ_NEGOCIO || 'America/Sao_Paulo',
   databaseUrl: env.DATABASE_URL || '',
@@ -18,12 +24,12 @@ export const config = {
   appUsuario: env.APP_USER || 'admin',
   appSenha: env.APP_PASSWORD || gerada('APP_PASSWORD'),
   segredoSessao: env.SESSION_SECRET || randomBytes(32).toString('hex'),
-  confiarProxy: env.TRUST_PROXY === '1',
+  confiarProxy: env.TRUST_PROXY === '1' || naVercel,
   tokenDispositivo: env.DEVICE_TOKEN || '',
-  mqttAtivo: env.MQTT_ATIVO !== 'false',
+  mqttAtivo: env.MQTT_ATIVO !== 'false' && !naVercel,
   mqttUrl: env.MQTT_URL || '',
   mqttPorta: Number(env.MQTT_PORT || 1883),
   mqttUsuario: env.MQTT_USER || 'ampera',
-  mqttSenha: env.MQTT_PASSWORD || (env.MQTT_ATIVO === 'false' ? '' : gerada('MQTT_PASSWORD')),
+  mqttSenha: env.MQTT_PASSWORD || (env.MQTT_ATIVO === 'false' || naVercel ? '' : gerada('MQTT_PASSWORD')),
   tarifaPadrao: Number(env.TARIFA_PADRAO || 0.85),
 }

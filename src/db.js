@@ -43,7 +43,11 @@ export async function iniciarBanco() {
   if (config.databaseUrl) {
     const { default: pg } = await import('pg')
     const local = /localhost|127\.0\.0\.1/.test(config.databaseUrl)
-    const pool = new pg.Pool({ connectionString: config.databaseUrl, ssl: local ? false : { rejectUnauthorized: true } })
+    const pool = new pg.Pool({
+      connectionString: config.databaseUrl,
+      ssl: local ? false : { rejectUnauthorized: true },
+      max: config.naVercel ? 3 : 10,
+    })
     executar = (sql, params) => pool.query(sql, params)
     await pool.query(ESQUEMA)
     console.log('[banco] PostgreSQL conectado')
