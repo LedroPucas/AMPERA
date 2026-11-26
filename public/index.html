@@ -44,6 +44,22 @@
     <section id="aba-painel" class="conteudo aba">
       <div id="aviso-fora" class="aviso" hidden>Consumo fora do horário de funcionamento: <strong id="aviso-fora-w"></strong> agora.</div>
       <div class="grade g4">
+        <div class="cartao"><span class="rotulo">Hoje</span><span class="valor" id="v-hoje-custo">–</span><span class="suave" id="v-hoje-kwh"></span></div>
+        <div class="cartao"><span class="rotulo">Este mês até agora</span><span class="valor" id="v-mes-custo">–</span><span class="suave" id="v-mes-kwh"></span></div>
+        <div class="cartao destaque"><span class="rotulo">Estimativa para o mês</span><span class="valor" id="v-proj-custo">–</span><span class="suave" id="v-proj-kwh"></span></div>
+        <div class="cartao"><span class="rotulo">Fora do horário no mês</span><span class="valor" id="v-fora-custo">–</span><span class="suave" id="v-fora-info"></span></div>
+      </div>
+      <div class="cartao">
+        <span class="rotulo">Consumo em reais por dia neste mês</span>
+        <div class="rolagem tabela-limite">
+          <table id="tabela-reais">
+            <thead><tr><th>Dia</th><th>kWh</th><th>Custo</th></tr></thead>
+            <tbody></tbody>
+            <tfoot></tfoot>
+          </table>
+        </div>
+      </div>
+      <div class="grade g4">
         <div class="cartao destaque"><span class="rotulo">Potência agora</span><span class="valor" id="v-potencia">–</span></div>
         <div class="cartao"><span class="rotulo">Corrente</span><span class="valor" id="v-corrente">–</span></div>
         <div class="cartao"><span class="rotulo">Tensão</span><span class="valor" id="v-tensao">–</span></div>
@@ -52,12 +68,6 @@
       <div class="cartao">
         <span class="rotulo">Potência nos últimos 15 minutos (W)</span>
         <div class="grafico"><canvas id="grafico-vivo"></canvas></div>
-      </div>
-      <div class="grade g4">
-        <div class="cartao"><span class="rotulo">Hoje</span><span class="valor" id="v-hoje-custo">–</span><span class="suave" id="v-hoje-kwh"></span></div>
-        <div class="cartao"><span class="rotulo">Este mês até agora</span><span class="valor" id="v-mes-custo">–</span><span class="suave" id="v-mes-kwh"></span></div>
-        <div class="cartao destaque"><span class="rotulo">Estimativa para o mês</span><span class="valor" id="v-proj-custo">–</span><span class="suave" id="v-proj-kwh"></span></div>
-        <div class="cartao"><span class="rotulo">Fora do horário no mês</span><span class="valor" id="v-fora-custo">–</span><span class="suave" id="v-fora-info"></span></div>
       </div>
       <p class="suave" id="nota-tarifa"></p>
     </section>
