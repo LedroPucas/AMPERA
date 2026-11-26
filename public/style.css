@@ -112,3 +112,7 @@ legend { color: var(--suave); font-size: 0.85rem; padding: 0 0.3rem; }
 .dias label { flex-direction: row; align-items: center; gap: 0.3rem; }
 
 button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.tabela-limite { max-height: 320px; overflow-y: auto; }
+.tabela-limite thead th { position: sticky; top: 0; background: var(--cartao); }
+.tabela-limite tfoot td { position: sticky; bottom: 0; background: var(--cartao); border-top: 1px solid var(--borda); }

@@ -166,9 +166,26 @@ function mostrarResumo(r) {
   $('#nota-tarifa').textContent = `Tarifa: ${reais(r.dispositivo.tarifa)} por kWh. A estimativa do mês supõe que o consumo médio medido até agora se mantém até o último dia.`
 }
 
+async function carregarTabelaReais() {
+  const hoje = hojeLocal()
+  const dias = estado.id ? (await apiDisp(`/historico?mes=${hoje.slice(0, 7)}`)).reverse() : []
+  const tabela = $('#tabela-reais')
+  const rotulo = (p) => `${p.slice(8, 10)}/${p.slice(5, 7)}${p === hoje ? ' (hoje)' : ''}`
+  tabela.tBodies[0].replaceChildren(
+    ...(dias.length
+      ? dias.map((d) => linha(rotulo(d.periodo), numero(d.kwh, 3), reais(d.custo)))
+      : [linha('Sem leituras neste mês', '', '')]),
+  )
+  const soma = (campo) => dias.reduce((t, d) => t + d[campo], 0)
+  tabela.tFoot.replaceChildren(...(dias.length ? [linha('Total do mês', numero(soma('kwh'), 3), reais(soma('custo')))] : []))
+}
+
 async function carregarPainel() {
-  if (!estado.id) return void graficoVivo()
-  const [resumo, recentes] = await Promise.all([apiDisp('/resumo'), apiDisp('/recentes?min=15')])
+  if (!estado.id) {
+    graficoVivo()
+    return carregarTabelaReais()
+  }
+  const [resumo, recentes] = await Promise.all([apiDisp('/resumo'), apiDisp('/recentes?min=15'), carregarTabelaReais()])
   mostrarResumo(resumo)
   const g = graficoVivo()
   g.data.labels = recentes.map((l) => hora(new Date(l.ts).getTime()))
@@ -215,7 +232,9 @@ setInterval(async () => {
 setInterval(() => {
   if ($('#tela-app').hidden || !estado.id) return
   atualizarStatus()
-  if (estado.aba === 'painel') apiDisp('/resumo').then(mostrarResumo).catch(() => {})
+  if (estado.aba !== 'painel') return
+  apiDisp('/resumo').then(mostrarResumo).catch(() => {})
+  carregarTabelaReais().catch(() => {})
 }, 30000)
 
 /* ---------- Histórico ---------- */
