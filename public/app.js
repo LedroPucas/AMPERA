@@ -170,9 +170,41 @@ function mostrarResumo(r) {
   $('#nota-tarifa').textContent = `Tarifa: ${reais(r.dispositivo.tarifa)} por kWh. A estimativa do mês supõe que o consumo médio medido até agora se mantém até o último dia.`
 }
 
+// Sem ESP32 conectado, o painel mostra valores de exemplo nos custos e na tabela em reais.
+const TARIFA_EXEMPLO = 0.85
+
+function diasExemplo() {
+  const hoje = hojeLocal()
+  const [ano, mes, diaHoje] = hoje.split('-').map(Number)
+  return Array.from({ length: diaHoje }, (_, i) => {
+    const dia = i + 1
+    const fimDeSemana = [0, 6].includes(new Date(ano, mes - 1, dia).getDay())
+    const kwhDia = (fimDeSemana ? 6.2 : 12.4) + 1.8 * Math.sin(dia * 1.7) + (dia === diaHoje ? -4 : 0)
+    return { periodo: `${hoje.slice(0, 8)}${String(dia).padStart(2, '0')}`, kwh: kwhDia, custo: kwhDia * TARIFA_EXEMPLO }
+  }).reverse()
+}
+
+function resumoExemplo() {
+  const dias = diasExemplo()
+  const [ano, mes] = hojeLocal().split('-').map(Number)
+  const diasNoMes = new Date(ano, mes, 0).getDate()
+  const kwhMes = dias.reduce((t, d) => t + d.kwh, 0)
+  const kwhProjetado = (kwhMes / dias.length) * diasNoMes
+  const kwhFora = kwhMes * 0.07
+  return {
+    ultima: null,
+    alerta: false,
+    hoje: { kwh: dias[0].kwh, custo: dias[0].custo, pico_w: 3150 },
+    mes: { kwh: kwhMes, custo: kwhMes * TARIFA_EXEMPLO, kwh_projetado: kwhProjetado, custo_projetado: kwhProjetado * TARIFA_EXEMPLO, medindo_desde: new Date(ano, mes - 1, 1, 8) },
+    fora_do_horario: { kwh: kwhFora, custo: kwhFora * TARIFA_EXEMPLO, alertas: 4 },
+    dispositivo: { tarifa: TARIFA_EXEMPLO },
+  }
+}
+
 async function carregarTabelaReais() {
   const hoje = hojeLocal()
-  const dias = estado.id ? (await apiDisp(`/historico?mes=${hoje.slice(0, 7)}`)).reverse() : []
+  const dias = estado.id ? (await apiDisp(`/historico?mes=${hoje.slice(0, 7)}`)).reverse() : diasExemplo()
+  $('#rotulo-reais').textContent = `Consumo em reais por dia neste mês${estado.id ? '' : ' (exemplo)'}`
   const tabela = $('#tabela-reais')
   const rotulo = (p) => `${p.slice(8, 10)}/${p.slice(5, 7)}${p === hoje ? ' (hoje)' : ''}`
   tabela.tBodies[0].replaceChildren(
@@ -187,6 +219,8 @@ async function carregarTabelaReais() {
 async function carregarPainel() {
   if (!estado.id) {
     graficoVivo()
+    mostrarResumo(resumoExemplo())
+    $('#nota-tarifa').textContent = 'Valores de exemplo: aparecem enquanto nenhum ESP32 envia leituras.'
     return carregarTabelaReais()
   }
   const [resumo, recentes] = await Promise.all([apiDisp('/resumo'), apiDisp('/recentes?min=15'), carregarTabelaReais()])
