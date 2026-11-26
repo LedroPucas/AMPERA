@@ -13,7 +13,11 @@ const watts = (v) => (v >= 1000 ? `${numero(v / 1000, 2)} kW` : `${numero(v)} W`
 const kwh = (v) => `${numero(v, v < 10 ? 3 : 1)} kWh`
 const dataHora = (iso) => new Date(iso).toLocaleString('pt-BR', { timeZone: estado.fuso, dateStyle: 'short', timeStyle: 'short' })
 const hora = (ms) => new Date(ms).toLocaleTimeString('pt-BR', { timeZone: estado.fuso, hour: '2-digit', minute: '2-digit' })
-const hojeLocal = () => new Date().toLocaleDateString('en-CA', { timeZone: estado.fuso })
+const hojeLocal = () => {
+  const partes = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: estado.fuso, year: 'numeric', month: '2-digit', day: '2-digit' })
+    .formatToParts(new Date()).map((p) => [p.type, p.value]))
+  return `${partes.year}-${partes.month}-${partes.day}`
+}
 
 async function api(caminho, opcoes = {}) {
   const resposta = await fetch(`/api${caminho}`, {
