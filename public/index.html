@@ -37,7 +37,7 @@
     <div id="vazio" class="conteudo" hidden>
       <div class="aviso-info">
         <strong>Sem dados ainda: nenhum ESP32 conectado.</strong>
-        Ligue o ESP32 (firmware em <code>firmware/ampera_esp32</code>) ou rode <code>npm run simular</code> para testar sem o hardware. As leituras aparecem aqui sozinhas assim que a primeira chegar.
+        Ligue o ESP32 (firmware em <code>firmware/ampera_esp32</code>) ou rode <code>npm run simular</code> para testar sem o hardware. As leituras aparecem aqui sozinhas assim que a primeira chegar. Até lá, os custos e a tabela em reais mostram valores de exemplo.
       </div>
     </div>
 
@@ -50,7 +50,7 @@
         <div class="cartao"><span class="rotulo">Fora do horário no mês</span><span class="valor" id="v-fora-custo">–</span><span class="suave" id="v-fora-info"></span></div>
       </div>
       <div class="cartao">
-        <span class="rotulo">Consumo em reais por dia neste mês</span>
+        <span class="rotulo" id="rotulo-reais">Consumo em reais por dia neste mês</span>
         <div class="rolagem tabela-limite">
           <table id="tabela-reais">
             <thead><tr><th>Dia</th><th>kWh</th><th>Custo</th></tr></thead>
